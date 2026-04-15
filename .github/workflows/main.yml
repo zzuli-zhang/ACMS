@@ -1,17 +1,58 @@
-name: Simple WAR Builder
+name: Build WAR Package
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '8'
-      - run: mvn -f back/pom.xml clean package -DskipTests
-      - uses: actions/upload-artifact@v4
-        with:
-          name: war-file
-          path: back/target/*.war
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'temurin'
+    
+    - name: Configure Maven mirror (for faster builds in China)
+      run: |
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml << 'EOF'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                      https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          <mirrors>
+            <mirror>
+              <id>aliyunmaven</id>
+              <mirrorOf>*</mirrorOf>
+              <name>阿里云镜像</name>
+              <url>https://maven.aliyun.com/repository/public</url>
+            </mirror>
+          </mirrors>
+        </settings>
+        EOF
+    
+    - name: Build WAR package (skip tests)
+      run: |
+        cd back
+        mvn clean package -DskipTests
+      # 如果你看到数据库连接错误，可以用这个更彻底的跳过：
+      # mvn clean package -DskipTests -Dmaven.test.skip=true
+    
+    - name: List generated WAR files
+      run: ls -la back/target/*.war
+    
+    - name: Upload WAR artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: acms-war
+        path: back/target/*.war
+        retention-days: 30
